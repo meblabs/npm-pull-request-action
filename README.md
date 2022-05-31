@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: npm pull request
-        uses: meblabs/npm-pull-request-action@main
+        uses: meblabs/npm-pull-request-action@v1.0
         with:
           # prettier: true | false (default true)
           # eslint: true | false (default true)
