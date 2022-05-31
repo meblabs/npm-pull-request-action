@@ -1,0 +1,66 @@
+name: "NpmPullRequest"
+description: GitHub action for MEBlabs pull request in npm projects"
+
+inputs:
+  prettier:
+    description: "check format with prettier"
+    required: false
+    default: true
+  eslint:
+    description: "check code with eslint"
+    required: false
+    default: true
+  test:
+    description: "exec test"
+    required: false
+    default: true
+
+runs:
+  using: "composite"
+  steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci
+
+      - if: ${{ inputs.prettier }}
+        name: Run Prettier
+        shell: bash
+        run: npm run format
+
+      - if: ${{ inputs.prettier }}
+        name: Check for Prettier changes
+        shell: bash
+        id: prettier
+        run: echo ::set-output name=changes::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
+
+      - if: ${{ inputs.prettier }}
+        name: Commit if there are a changes
+        shell: bash
+        if: steps.prettier.outputs.changes == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -am "chore: code formatted with prettier [skip ci]"
+          git push
+
+      - if: ${{ inputs.eslint }}
+        name: Run Eslint
+        uses: reviewdog/action-eslint@v1
+        with:
+          reporter: github-pr-review
+          eslint_flags: '. --ext .js'
+
+      - if: ${{ inputs.test }}
+      - name: Run tests
+        uses: ArtiomTr/jest-coverage-report-action@v2.0.6
