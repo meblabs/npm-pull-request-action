@@ -6,7 +6,8 @@ The action optionaly format code with prettier, check eslint errors/warnings and
 
 ## How to use
 
-Package requierment
+Package requierments:
+
 - prettier 
 - jest 
 - eslint with plugin
@@ -19,7 +20,9 @@ Add followign script to package.json:
 }
 ```
 
-Example of workflow
+In folder `example` there is a configuration for standard NodeJS Rest Api
+
+## Workflow
 
 ```yml
 name: PullRequest
