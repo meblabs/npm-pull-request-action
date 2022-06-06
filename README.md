@@ -20,7 +20,10 @@ Add followign script to package.json:
 }
 ```
 
-In folder `example` there is a configuration for standard NodeJS Rest Api
+In folder `example` there is a configuration for standard NodeJS Rest Api.
+
+### Pay Attenction
+The package-lock.json file must be committed and can not be in the .gitignore
 
 ## Workflow
 
