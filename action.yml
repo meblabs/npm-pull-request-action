@@ -19,8 +19,7 @@ inputs:
     default: true
   token:
     description: "Personal access token to handle the repo"
-    required: false
-    default: ${{ secrets.GITHUB_TOKEN }}
+    required: true
 
 runs:
   using: "composite"
