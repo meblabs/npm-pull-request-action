@@ -17,6 +17,10 @@ inputs:
     required: false
     type: boolean
     default: true
+  token:
+    description: "Personal access token to handle the repo"
+    required: false
+    default: ${{ secrets.GITHUB_TOKEN }}
 
 runs:
   using: "composite"
@@ -26,6 +30,7 @@ runs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ inputs.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
