@@ -66,6 +66,7 @@ runs:
         with:
           reporter: github-pr-review
           eslint_flags: '. --ext .js'
+          github_token: ${{ inputs.token }}
 
       - if: ${{ inputs.test == 'true' }}
         name: Run tests
