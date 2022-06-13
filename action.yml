@@ -20,9 +20,6 @@ inputs:
   token:
     description: "Personal access token to handle the repo"
     required: true
-  token-test:
-    description: token
-    required: true
   test-script:
         required: false
         description: 'A custom npm script to get coverage'
@@ -79,5 +76,5 @@ runs:
         name: Run tests
         uses: ArtiomTr/jest-coverage-report-action@v2
         with:
-          github-token: ${{ inputs.token-test }}
+          github-token: ${{ inputs.token }}
           test-script: ${{ inputs.test-script }}
