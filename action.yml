@@ -78,4 +78,3 @@ runs:
         with:
           github-token: ${{ inputs.token }}
           test-script: ${{ inputs.test-script }}
-          annotations: none
