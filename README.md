@@ -44,4 +44,6 @@ jobs:
           # prettier: true | false (default true)
           # eslint: true | false (default true)
           # test: true | false (default true)
+	  # token: ${{ secrets.GITHUB_TOKEN }}
+	  # test-script: npx jest
 ```

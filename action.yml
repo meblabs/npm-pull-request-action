@@ -17,6 +17,13 @@ inputs:
     required: false
     type: boolean
     default: true
+  token:
+    description: "Personal access token to handle the repo"
+    required: true
+  test-script:
+        required: false
+        description: 'A custom npm script to get coverage'
+        default: npx jest
 
 runs:
   using: "composite"
@@ -26,6 +33,7 @@ runs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ inputs.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -62,7 +70,11 @@ runs:
         with:
           reporter: github-pr-review
           eslint_flags: '. --ext .js'
+          github_token: ${{ inputs.token }}
 
       - if: ${{ inputs.test == 'true' }}
         name: Run tests
-        uses: ArtiomTr/jest-coverage-report-action@v2.0.6
+        uses: ArtiomTr/jest-coverage-report-action@v2
+        with:
+          github-token: ${{ inputs.token }}
+          test-script: ${{ inputs.test-script }}
