@@ -37,10 +37,6 @@ on:
 jobs:
   pullrequest:
     runs-on: ubuntu-latest
-    permissions:
-      checks: write
-      pull-requests: write
-      contents: read
     steps:
       - name: npm pull request
         uses: meblabs/npm-pull-request-action@v1.0
@@ -48,4 +44,6 @@ jobs:
           # prettier: true | false (default true)
           # eslint: true | false (default true)
           # test: true | false (default true)
+	  # token: ${{ secrets.GITHUB_TOKEN }}
+	  # test-script: npx jest
 ```
