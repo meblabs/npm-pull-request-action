@@ -59,9 +59,10 @@ runs:
         name: Commit if there are a changes
         shell: bash
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git commit -am "chore: code formatted with prettier [skip ci]"
+          git config user.name 'MeblabsBot'
+          git config user.email 'github@meblabs.com'
+          git add --all
+          git commit -m "chore: code formatted with prettier [skip ci]"
           git push
 
       - if: ${{ inputs.eslint == 'true' }}
