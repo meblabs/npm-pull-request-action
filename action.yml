@@ -83,6 +83,6 @@ runs:
         name: Run tests
         uses: ArtiomTr/jest-coverage-report-action@v2
         with:
-          github-token: ${{ inputs.test-token }}
+          github-token: ${{ inputs.token }}
           test-script: ${{ inputs.test-script }}
           working-directory: ${{ inputs.working-directory }}
