@@ -23,7 +23,8 @@ Add followign script to package.json:
 In folder `example` there is a configuration for standard NodeJS Rest Api.
 
 ### Pay Attenction
-The package-lock.json file must be committed and can not be in the .gitignore
+- The package-lock.json file must be committed and can not be in the .gitignore
+- If you want to run tests you must pass github-token: ${{ secrets.GITHUB_TOKEN}} in addition to token: ${{ secrets.MEBBOT }} and permissions must be set
 
 ## Workflow
 
@@ -36,6 +37,10 @@ on:
 
 jobs:
   pullrequest:
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: npm pull request
@@ -44,6 +49,7 @@ jobs:
           # prettier: true | false (default true)
           # eslint: true | false (default true)
           # test: true | false (default true)
-          # token: ${{ secrets.GITHUB_TOKEN }}
+          # token: ${{ secrets.MEBBOT }}
+	  # github-token: ${{ secrets.GITHUB_TOKEN  }}
           # test-script: npx jest
 ```
