@@ -30,11 +30,15 @@ inputs:
   working-directory:
         required: false
         description: "custom working directory"
+  checkout:
+    description: "Flag to indicate whether the repo has already been checked out"
+    default: true
 
 runs:
   using: "composite"
   steps:
-      - name: Checkout code
+      - if: ${{ inputs.checkout == 'true' }}
+        name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
