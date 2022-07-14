@@ -19,7 +19,7 @@ inputs:
     default: true
   token:
     description: "Personal access token to handle the repo"
-    required: true
+    required: false
   github-token:
     description: "Personal access token for tests"
     required: false
@@ -43,7 +43,7 @@ runs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ inputs.token }}
+          token: ${{ inputs.github-token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -54,12 +54,12 @@ runs:
         shell: bash
         run: npm ci
 
-      - if: ${{ inputs.prettier == 'true' }}
+      - if: ${{ inputs.prettier == 'true' && github.actor != 'dependabot[bot]' }}
         name: Run Prettier
         shell: bash
         run: npm run format
 
-      - if: ${{ inputs.prettier == 'true' }}
+      - if: ${{ inputs.prettier == 'true' && github.actor != 'dependabot[bot]' }}
         name: Check for Prettier changes
         shell: bash
         id: prettier
@@ -75,7 +75,7 @@ runs:
           git commit -m "chore: code formatted with prettier [skip ci]"
           git push
 
-      - if: ${{ inputs.eslint == 'true' }}
+      - if: ${{ inputs.eslint == 'true' && github.actor != 'dependabot[bot]' }}
         name: Run Eslint
         uses: reviewdog/action-eslint@v1
         with:
