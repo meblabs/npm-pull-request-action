@@ -50,6 +50,6 @@ jobs:
           # eslint: true | false (default true)
           # test: true | false (default true)
           # token: ${{ secrets.MEBBOT }}
-	  # github-token: ${{ secrets.GITHUB_TOKEN  }}
+          # github-token: ${{ secrets.GITHUB_TOKEN  }}
           # test-script: npx jest
 ```
