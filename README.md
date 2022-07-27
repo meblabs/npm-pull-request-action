@@ -24,7 +24,7 @@ In folder `example` there is a configuration for standard NodeJS Rest Api.
 
 ### Pay Attenction
 - The package-lock.json file must be committed and can not be in the .gitignore
-- If you want to run tests you must pass github-token: ${{ secrets.GITHUB_TOKEN}} in addition to token: ${{ secrets.MEBBOT }} and permissions must be set
+- If you want to run tests you must pass github-token: `${{ secrets.GITHUB_TOKEN}}` in addition to token: `${{ secrets.MEBBOT }}` and permissions must be set
 
 ## Workflow
 
