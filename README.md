@@ -52,5 +52,5 @@ jobs:
           # token: ${{ secrets.MEBBOT }}
           # github-token: ${{ secrets.GITHUB_TOKEN  }}
           # test-script: npx jest
-	  # checkout: true
+          # checkout: true
 ```
