@@ -31,7 +31,7 @@ inputs:
         required: false
         description: "custom working directory"
   checkout:
-    description: "Flag to indicate whether the repo has already been checked out"
+    description: "Flag to indicate whether the repo should be checked out"
     default: true
 
 runs:
