@@ -63,7 +63,7 @@ runs:
         name: Check for Prettier changes
         shell: bash
         id: prettier
-        run: echo ::set-output name=changes::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
+        run: echo "changes=$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)" >> $GITHUB_OUTPUT
 
       - if: steps.prettier.outputs.changes == 'true'
         name: Commit if there are a changes
