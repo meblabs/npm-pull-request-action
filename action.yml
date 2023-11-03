@@ -33,6 +33,9 @@ inputs:
   checkout:
     description: "Flag to indicate whether the repo should be checked out"
     default: true
+  node-version:
+    description: "Pick the node version to use [16.x, 18.x]"
+    default: 18.x
 
 runs:
   using: "composite"
@@ -48,7 +51,7 @@ runs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 16.x
+          node-version: ${{ inputs.node-version }}
 
       - name: Install dependencies
         shell: bash
