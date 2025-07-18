@@ -26,7 +26,7 @@ inputs:
   test-script:
         required: false
         description: "A custom npm script to get coverage"
-        default: npx jest
+        default: test
   working-directory:
         required: false
         description: "custom working directory"
@@ -35,14 +35,14 @@ inputs:
     default: true
   node-version:
     description: "Pick the node version to use [16.x, 18.x]"
-    default: 18.x
+    default: 22.x
 
 runs:
   using: "composite"
   steps:
       - if: ${{ inputs.checkout == 'true' }}
         name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
@@ -52,6 +52,7 @@ runs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ inputs.node-version }}
+          cache: npm 
 
       - name: Install dependencies
         shell: bash
@@ -87,9 +88,21 @@ runs:
           github_token: ${{ inputs.token }}
 
       - if: ${{ inputs.test == 'true' }}
-        name: Run tests
-        uses: ArtiomTr/jest-coverage-report-action@v2
+        name: Run Jest
+        shell: bash
+        env:
+          JEST_JUNIT_OUTPUT: junit.xml  
+        run: |
+          npm run ${{ inputs.test-script }} -- \
+            --ci \
+            --json \
+            --outputFile=jest-results.json
+
+      - if: always() && ${{ inputs.test == 'true' }}
+        name: Publish Jest report
+        uses: im-open/process-jest-test-results@v2
         with:
           github-token: ${{ inputs.github-token }}
-          test-script: ${{ inputs.test-script }}
-          working-directory: ${{ inputs.working-directory }}
+          results-file: jest-results.json         
+          report-name: Jest Tests                 
+          create-pr-comment: true                 

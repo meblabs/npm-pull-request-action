@@ -51,6 +51,7 @@ jobs:
           # test: true | false (default true)
           # token: ${{ secrets.MEBBOT }}
           # github-token: ${{ secrets.GITHUB_TOKEN  }}
-          # test-script: npx jest
-          # checkout: true
+          # test-script: test (default 'test')
+          # checkout: true | false (default true)
+          # node-version: 20.x (default 22.x)
 ```
