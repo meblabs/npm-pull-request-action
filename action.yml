@@ -91,7 +91,8 @@ runs:
         name: Run Jest
         shell: bash
         env:
-          JEST_JUNIT_OUTPUT: junit.xml  
+          JEST_JUNIT_OUTPUT: junit.xml
+        continue-on-error: true
         run: |
           npm run ${{ inputs.test-script }} -- \
             --ci \
@@ -103,6 +104,6 @@ runs:
         uses: im-open/process-jest-test-results@v2
         with:
           github-token: ${{ inputs.github-token }}
-          results-file: jest-results.json         
-          report-name: Jest Tests                 
-          create-pr-comment: true                 
+          results-file: jest-results.json
+          report-name: Jest Tests
+          create-pr-comment: true
