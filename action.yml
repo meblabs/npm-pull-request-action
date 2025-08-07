@@ -99,7 +99,7 @@ runs:
             --json \
             --outputFile=jest-results.json
 
-      - if: always() && ${{ inputs.test == 'true' }}
+      - if: ${{ (success() || failure()) && inputs.test == 'true' }}
         name: Publish Jest report
         uses: im-open/process-jest-test-results@v2
         with:
