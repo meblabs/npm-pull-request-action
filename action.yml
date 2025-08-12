@@ -18,92 +18,231 @@ inputs:
     type: boolean
     default: true
   token:
-    description: "Personal access token to handle the repo"
+    description: "Personal access token to handle the rep and merge pull requests"
     required: false
   github-token:
     description: "Personal access token for tests"
     required: false
   test-script:
-        required: false
-        description: "A custom npm script to get coverage"
-        default: test
+    required: false
+    description: "A custom npm script to get coverage"
+    default: test
   working-directory:
-        required: false
-        description: "custom working directory"
+    required: false
+    description: "custom working directory"
   checkout:
     description: "Flag to indicate whether the repo should be checked out"
     default: true
   node-version:
-    description: "Pick the node version to use [16.x, 18.x]"
+    description: "Pick the node version to use [20.x, 22.x, ...]"
     default: 22.x
+  enable-security:
+    description: "Enable Snyk code scan and PR SARIF comment"
+    type: boolean
+    default: true
+  bot_name:
+    description: "Bot username: security runs only if PR author != bot_name"
+    required: false
+    default: MeblabsBot
+  bot_email:
+    description: "Bot email"
+    required: false
+    default: github@meblabs.com
+  snyk-token:
+    description: "SNYK_TOKEN"
+    required: false
+  snyk-org:
+    description: "Snyk org slug"
+    required: false
+  enable-auto-merge:
+    description: "Enable auto-merge logic (only when PR author == bot_name)"
+    type: boolean
+    default: true
+  protected-branches:
+    description: "Comma-separated list of branches that should not be deleted after merge"
+    required: false
+    default: "dev,staging,release"
+  allowed-branches:
+    description: "Comma-separated list of branches that should be allowed for auto-merge"
+    required: false
+    default: "dev"
+  snyk-severity-threshold:
+    description: "Snyk severity threshold"
+    required: false
+    default: "high"
 
 runs:
   using: "composite"
   steps:
-      - if: ${{ inputs.checkout == 'true' }}
-        name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ inputs.github-token }}
+    - if: ${{ inputs.checkout == 'true' }}
+      name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.event.pull_request.head.ref }}
+        token: ${{ inputs.github-token }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ inputs.node-version }}
-          cache: npm 
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm 
 
-      - name: Install dependencies
-        shell: bash
-        run: npm ci
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
 
-      - if: ${{ inputs.prettier == 'true' && github.actor != 'dependabot[bot]' }}
-        name: Run Prettier
-        shell: bash
-        run: npm run format
+    - if: ${{ inputs.prettier == 'true' }}
+      name: Run Prettier
+      shell: bash
+      run: npm run format
 
-      - if: ${{ inputs.prettier == 'true' && github.actor != 'dependabot[bot]' }}
-        name: Check for Prettier changes
-        shell: bash
-        id: prettier
-        run: echo "changes=$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)" >> $GITHUB_OUTPUT
+    - if: ${{ inputs.prettier == 'true' }}
+      name: Check for Prettier changes
+      shell: bash
+      id: prettier
+      run: echo "changes=$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)" >> $GITHUB_OUTPUT
 
-      - if: steps.prettier.outputs.changes == 'true'
-        name: Commit if there are a changes
-        shell: bash
-        run: |
-          git config user.name 'MeblabsBot'
-          git config user.email 'github@meblabs.com'
-          git add --all
-          git commit -m "chore: code formatted with prettier [skip ci]"
-          git push
+    - if: steps.prettier.outputs.changes == 'true'
+      name: Commit if there are a changes
+      shell: bash
+      run: |
+        git config user.name '${{ inputs.bot_name }}'
+        git config user.email '${{ inputs.bot_email }}'
+        git add --all
+        git commit -m "chore: code formatted with prettier [skip ci]"
+        git push
 
-      - if: ${{ inputs.eslint == 'true' && github.actor != 'dependabot[bot]' }}
-        name: Run Eslint
-        uses: reviewdog/action-eslint@v1
-        with:
-          reporter: github-pr-review
-          eslint_flags: '. --ext .js'
-          github_token: ${{ inputs.token }}
+    - if: ${{ inputs.eslint == 'true' }}
+      name: Run Eslint
+      uses: reviewdog/action-eslint@v1
+      with:
+        reporter: github-pr-review
+        eslint_flags: '. --ext .js'
+        github_token: ${{ inputs.token }}
 
-      - if: ${{ inputs.test == 'true' }}
-        name: Run Jest
-        shell: bash
-        env:
-          JEST_JUNIT_OUTPUT: junit.xml
-        continue-on-error: true
-        run: |
-          npm run ${{ inputs.test-script }} -- \
-            --ci \
-            --json \
-            --outputFile=jest-results.json
+    - if: ${{ inputs.test == 'true' }}
+      name: Run Jest
+      shell: bash
+      env:
+        JEST_JUNIT_OUTPUT: junit.xml
+      continue-on-error: true
+      run: |
+        npm run ${{ inputs.test-script }} -- \
+          --ci \
+          --json \
+          --outputFile=jest-results.json
 
-      - if: ${{ (success() || failure()) && inputs.test == 'true' }}
-        name: Publish Jest report
-        uses: im-open/process-jest-test-results@v2
-        with:
-          github-token: ${{ inputs.github-token }}
-          results-file: jest-results.json
-          report-name: Jest Tests
-          create-pr-comment: true
+    - if: ${{ (success() || failure()) && inputs.test == 'true' }}
+      name: Publish Jest report
+      uses: im-open/process-jest-test-results@v2
+      with:
+        github-token: ${{ inputs.github-token }}
+        results-file: jest-results.json
+        report-name: Jest Tests
+        create-pr-comment: true
+
+    - if: ${{ inputs.enable-security == 'true' && github.event.pull_request.user.login != inputs.bot_name }}
+      name: Snyk code scan
+      id: snyk
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token }}
+      with:
+        args: --sarif-file-output=snyk.sarif --org=${{ inputs.snyk-org }} --severity-threshold=${{ inputs.snyk-severity-threshold }}
+        command: code test
+
+    - if: ${{ inputs.enable-security == 'true' && failure() && steps.snyk.outcome == 'failure' && github.event.pull_request.user.login != inputs.bot_name }}
+      name: Post SARIF findings in the pull request
+      uses: sett-and-hive/sarif-to-comment-action@v2.0.1
+      with:
+        token: ${{ inputs.github-token }}
+        repository: ${{ github.repository }}
+        branch: ${{ github.head_ref }}
+        pr-number: ${{ github.event.pull_request.number }}
+        sarif-file: snyk.sarif
+        title: Security Issues Found
+
+    - if: ${{ inputs.enable-auto-merge == 'true' && github.event.pull_request.user.login == inputs.bot_name }}
+      name: Enable auto-merge (gh)
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PROTECTED_BRANCHES: ${{ inputs.protected-branches }}
+        ALLOWED_BRANCHES: ${{ inputs.allowed-branches }}
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+
+        is_allowed_to_merge=0
+        IFS=',' read -ra a_branches <<< "${ALLOWED_BRANCHES:-}"
+        for b in "${a_branches[@]}"; do
+          # Trim leading and trailing whitespace
+          b="${b#"${b%%[![:space:]]*}"}"
+          b="${b%"${b##*[![:space:]]}"}"
+
+          [[ -z "$b" ]] && continue
+          if [[ "$HEAD_REF" == "$b" ]]; then
+            is_allowed_to_merge=1
+            break
+          fi
+        done
+
+        if [[ is_allowed_to_merge == 1 ]]; then
+          echo "Auto-merge is enabled for branch $HEAD_REF. We can proceed."
+        else
+          echo "Auto-merge is disabled for branch $HEAD_REF. We must stop here."
+          exit 0
+        fi
+
+        PR_URL="${{ github.event.pull_request.html_url }}"
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        HEAD_REF="${{ github.event.pull_request.head.ref }}"
+
+        COMMIT_COUNT=$(gh pr view "$PR_NUMBER" --json commits --jq '.commits | length' || echo "0")
+        if [[ "$COMMIT_COUNT" -gt 1 ]]; then
+          echo "Auto-merge is disabled for PRs with more than one commit."
+          exit 0
+        fi
+
+        # List of "pinned" dependencies (e.g. 1.2.3, 1.2.3-beta, 1.2.3+build)
+        if [[ -f package.json ]]; then
+          avoid_auto_merge=$(jq -r '
+            .dependencies // {} |
+            to_entries[] |
+            select(.value | test("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$")) |
+            .key' package.json || true)
+        else
+          avoid_auto_merge=""
+        fi
+
+        MSG=$(gh pr view "$PR_NUMBER" --json commits --jq '.commits[0].messageHeadline' || echo "")
+        # Es: "fix: upgrade dep123 from 1.2.0 to 1.3.0"  -> "dep123"
+        UPDATED_DEP=$(echo "$MSG" | cut -d ' ' -f 3 || true)
+
+        if [[ -n "${UPDATED_DEP:-}" ]] && [[ "$avoid_auto_merge" == *"$UPDATED_DEP"* ]]; then
+          echo "Auto-merge is disabled for PRs that update $UPDATED_DEP."
+          exit 0
+        fi
+
+        is_protected=false
+        IFS=',' read -ra _branches <<< "${PROTECTED_BRANCHES:-}"
+        for b in "${_branches[@]}"; do
+          # Trim leading and trailing whitespace
+          b="${b#"${b%%[![:space:]]*}"}"
+          b="${b%"${b##*[![:space:]]}"}"
+
+          [[ -z "$b" ]] && continue
+          if [[ "$HEAD_REF" == "$b" ]]; then
+            is_protected=true
+            break
+          fi
+        done
+
+        if $is_protected; then
+          echo "Branch $HEAD_REF is protected and won't be deleted after merge."
+          gh pr merge --auto --merge "$PR_URL"
+        else
+          echo "!!! Branch $HEAD_REF is not protected, it will be deleted after merge."
+          gh pr merge --auto --merge --delete-branch "$PR_URL"
+        fi
