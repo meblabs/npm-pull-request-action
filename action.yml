@@ -154,8 +154,7 @@ runs:
 
     - if: ${{ inputs.enable-security == 'true' && failure() && steps.snyk.outcome == 'failure' && github.event.pull_request.user.login != inputs.bot_name }}
       name: Post SARIF findings in the pull request
-      uses: sett-and-hive/sarif-to-comment-action/composite@v1
-      # uses: sett-and-hive/sarif-to-comment-action@v2.0.1
+      uses: meblabs/sarif-to-comment-action@v1
       with:
         token: ${{ inputs.github-token }}
         repository: ${{ github.repository }}
