@@ -86,7 +86,7 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: npm 
+        cache: npm
 
     - name: Install dependencies
       shell: bash
@@ -118,7 +118,7 @@ runs:
       uses: reviewdog/action-eslint@v1
       with:
         reporter: github-pr-review
-        eslint_flags: '. --ext .js'
+        eslint_flags: ". --ext .js"
         github_token: ${{ inputs.token }}
 
     - if: ${{ inputs.test == 'true' }}
@@ -154,7 +154,8 @@ runs:
 
     - if: ${{ inputs.enable-security == 'true' && failure() && steps.snyk.outcome == 'failure' && github.event.pull_request.user.login != inputs.bot_name }}
       name: Post SARIF findings in the pull request
-      uses: sett-and-hive/sarif-to-comment-action@v2.0.1
+      uses: sett-and-hive/sarif-to-comment-action/composite@v1
+      # uses: sett-and-hive/sarif-to-comment-action@v2.0.1
       with:
         token: ${{ inputs.github-token }}
         repository: ${{ github.repository }}
