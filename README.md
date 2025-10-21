@@ -1,6 +1,6 @@
 # NPM Pull Request Action
 
-![version](https://img.shields.io/badge/version-2.1-blue)
+![version](https://img.shields.io/badge/version-3.0-blue)
 ![type](https://img.shields.io/badge/type-Composite%20Action-2ea44f) ![node](<https://img.shields.io/badge/Node-22.x%20(default)-informational>)
 ![prettier](https://img.shields.io/badge/Prettier-optional-success) ![eslint](https://img.shields.io/badge/ESLint-optional-success) ![jest](https://img.shields.io/badge/Jest-optional-success) ![snyk](https://img.shields.io/badge/Snyk-optional-success)
 [![](https://img.shields.io/static/v1?label=MEBlabs&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/meblabs)
