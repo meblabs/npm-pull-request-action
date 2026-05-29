@@ -1,123 +1,239 @@
 # NPM Pull Request Action
 
-![version](https://img.shields.io/badge/version-3.0-blue)
-![type](https://img.shields.io/badge/type-Composite%20Action-2ea44f) ![node](<https://img.shields.io/badge/Node-22.x%20(default)-informational>)
-![prettier](https://img.shields.io/badge/Prettier-optional-success) ![eslint](https://img.shields.io/badge/ESLint-optional-success) ![jest](https://img.shields.io/badge/Jest-optional-success) ![snyk](https://img.shields.io/badge/Snyk-optional-success)
+![version](https://img.shields.io/badge/version-4.0-blue)
+![type](https://img.shields.io/badge/type-Composite%20Action-2ea44f)
+![node](<https://img.shields.io/badge/Node-22.x%20(default)-informational>)
+![prettier](https://img.shields.io/badge/Prettier-optional-success)
+![eslint](https://img.shields.io/badge/ESLint-optional-success)
+![jest](https://img.shields.io/badge/Jest-optional-success)
+![audit](https://img.shields.io/badge/npm%20audit-lockfile%20only-success)
 [![](https://img.shields.io/static/v1?label=MEBlabs&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/meblabs)
 
 **GitHub Action for MEBlabs pull requests in npm projects.**
-It can (optionally) format your code with Prettier, review ESLint findings on the PR, run Jest tests and publish a report, run a Snyk security scan (with SARIF comment on failure), and auto-merge bot PRs with safety checks.
+
+This composite action manages the npm pull request quality gate for JavaScript, Node.js, React, and npm-based projects.
+
+It can:
+
+- check out the repository;
+- configure Node.js;
+- install dependencies with `npm ci`;
+- format code with Prettier;
+- apply controlled npm lockfile vulnerability remediations;
+- create one automatic commit when Prettier and/or npm audit produce changes;
+- review ESLint findings on the pull request;
+- run Jest tests;
+- publish a Jest report on the pull request;
+- expose compact outputs that can be used by downstream jobs.
+
+This is the quality action. It is designed to live independently and can be used alone in npm pull request workflows.
+
+It can also work together with the separate MEBlabs Security Workflow, as described in [Integration with MEBlabs Security Workflow](#integration-with-meblabs-security-workflow).
 
 ---
 
-## What this action does (at a glance)
+## What this action does at a glance
 
-1. **Checkout & Node setup** (if enabled)
-2. **Install dependencies** (`npm ci`)
-3. **Prettier** (optional)
+1. **Checkout and Node setup**
 
-   - Runs your `format` script
-   - Auto-commits and pushes if there are changes (using the configured bot identity)
+   - Checks out the repository if `checkout: true`.
+   - Configures Node.js using `actions/setup-node`.
+   - Installs dependencies with `npm ci`.
 
-4. **ESLint** (optional)
+2. **Prettier**
 
-   - Uses `reviewdog` to comment findings directly on the PR
+   - Runs your `format` script.
+   - Detects whether formatting produced changes.
+   - Does not commit immediately.
+   - If Prettier and/or npm audit produce changes, the action creates one automatic commit near the end of the remediation phase.
 
-5. **Jest** (optional)
+3. **npm audit lockfile remediation**
 
-   - Runs tests (non-blocking)
-   - Publishes a PR report (even if tests fail)
+   - Runs `npm audit fix --package-lock-only`.
+   - Never allows automatic changes to `package.json`.
+   - Detects whether `package-lock.json` changed.
+   - If Prettier and/or npm audit produce changes, the action creates one automatic commit near the end of the remediation phase.
 
-6. **Security (Snyk)** (optional)
+4. **Automatic commit handling**
 
-   - Runs Snyk Code test with `--sarif-file-output`
-   - Posts a SARIF summary comment **only if the Snyk step fails**
-   - **Runs only if PR author ≠ `bot_name`**
+   - If Prettier changed files, npm audit changed `package-lock.json`, or both happened, the action commits all automatic changes in a single commit.
+   - The commit is pushed using the configured bot identity.
+   - The commit does **not** include `[skip ci]`.
+   - ESLint and Jest are skipped in the current execution so the next workflow run can validate the new commit.
 
-7. **Auto-merge** (optional)
+5. **ESLint**
 
-   - **Runs only if PR author = `bot_name` and the branch is allowed**
-   - Merges PRs that have exactly **one commit**
-   - Skips auto-merge if the PR updates a **pinned dependency** (semver string in `package.json` dependencies)
-   - Deletes the source branch after merge **unless** it’s in `protected-branches`
+   - Uses `reviewdog/action-eslint@v1`.
+   - Comments findings directly on the pull request.
+   - Runs only if no automatic commit was created by Prettier or npm audit.
+
+6. **Jest**
+
+   - Runs tests.
+   - Publishes a pull request report even if tests fail.
+   - Runs only if no automatic commit was created by Prettier or npm audit.
+
+7. **Downstream workflow coordination**
+
+   - Exposes compact outputs for downstream workflow orchestration:
+     - `prettier-changed`;
+     - `audit-changed`;
+     - `current-head-sha`.
+   - Downstream jobs can use these outputs to decide whether they should run in the same workflow execution.
+   - Downstream jobs can use `current-head-sha` as the commit reference for further validation.
+
+---
+
+## Execution model
+
+This action is designed to avoid validating an obsolete commit.
+
+If Prettier or npm audit creates an automatic commit, the current run should not continue with ESLint, tests, or other downstream validation jobs, because the checked code is no longer the final pull request head.
+
+The intended flow is:
+
+```text
+Pull request commit
+  -> quality action runs
+  -> Prettier and npm audit remediation run
+  -> automatic commit is created if needed
+  -> workflow runs again on the new commit
+  -> quality action runs again
+  -> no automatic commit
+  -> ESLint runs
+  -> Jest runs
+  -> downstream validation jobs can run on the validated commit
+```
+
+This makes the pipeline more deterministic and more suitable for audit evidence, because tests and downstream validation jobs run on the commit that is actually being reviewed.
 
 ---
 
 ## Requirements in your repository
 
-- Commit your `package-lock.json` (don’t ignore it).
-- Add a `format` script to `package.json` if you enable Prettier:
+- Commit `package.json`.
+- Commit `package-lock.json`; do not ignore it.
+- Keep `package.json` stable during automatic audit remediation.
+- Add a `format` script to `package.json` if you enable Prettier.
 
-  ```json
-  {
-    "scripts": {
-      "format": "prettier --write \"**/*.{json,js,yml,md}\""
-    }
+Example:
+
+```json
+{
+  "scripts": {
+    "format": "prettier --write \"**/*.{json,js,jsx,mjs,cjs,yml,yaml,md}\""
   }
-  ```
+}
+```
+
+- Add a test script if you enable Jest.
+
+Example:
+
+```json
+{
+  "scripts": {
+    "test": "jest"
+  }
+}
+```
+
+The npm steps install, format, audit, lint, and test always run at the repository root.
 
 ---
 
 ## Inputs
 
-| Name                      | Type         |               Default | Description                                                                                                                  |
-| ------------------------- | ------------ | --------------------: | ---------------------------------------------------------------------------------------------------------------------------- |
-| `prettier`                | boolean      |                `true` | Run your `npm run format` and auto-commit any changes.                                                                       |
-| `eslint`                  | boolean      |                `true` | Run ESLint via `reviewdog/action-eslint@v1` and comment on the PR.                                                           |
-| `test`                    | boolean      |                `true` | Run Jest and publish a PR report (non-blocking).                                                                             |
-| `token`                   | string       |                     — | **PAT** (recommended) used by reviewdog to comment and by the auto-merge step as `GH_TOKEN`. Needs `repo` scope for merging. |
-| `github-token`            | string       |                     — | `GITHUB_TOKEN` (or PAT) used for checkout push, Jest report comment, and SARIF comment.                                      |
-| `test-script`             | string       |                `test` | Custom npm script for tests (e.g. `test:ci`).                                                                                |
-| `working-directory`       | string       |                     — | Working directory used **by the auto-merge step** context. (npm tasks run at repo root in v3.)                               |
-| `checkout`                | boolean      |                `true` | Perform `actions/checkout` inside the action. Disable if your workflow already checks out.                                   |
-| `node-version`            | string       |                `22.x` | Node version (e.g. `20.x`, `22.x`).                                                                                          |
-| `enable-security`         | boolean      |                `true` | Enable Snyk code scan and SARIF PR comment on failure.                                                                       |
-| `bot_name`                | string       |          `MeblabsBot` | Bot username. Security runs only if PR author ≠ this; auto-merge runs only if PR author = this.                              |
-| `bot_email`               | string       |  `github@meblabs.com` | Bot email used for Prettier auto-commits.                                                                                    |
-| `snyk-token`              | string       |                     — | `SNYK_TOKEN` for Snyk. Required if `enable-security: true`.                                                                  |
-| `snyk-org`                | string       |                     — | Snyk org slug for your project.                                                                                              |
-| `enable-auto-merge`       | boolean      |                `true` | Enable auto-merge logic for bot PRs.                                                                                         |
-| `protected-branches`      | string (CSV) | `dev,staging,release` | Branches **not** deleted after merge. Comma-separated; spaces are trimmed; exact, case-sensitive match.                      |
-| `allowed-branches`        | string (CSV) |                 `dev` | Branches **allowed** for auto-merge. Comma-separated; spaces are trimmed; exact, case-sensitive match.                       |
-| `snyk-severity-threshold` | string       |                `high` | Passed to Snyk as `--severity-threshold`. Typical values: `low` \| `medium` \| `high` \| `critical`.                         |
+| Name | Type | Default | Description |
+| ---- | ---- | ------: | ----------- |
+| `prettier` | boolean | `true` | Run `npm run format` and include formatting changes in the automatic commit when needed. |
+| `eslint` | boolean | `true` | Run ESLint via `reviewdog/action-eslint@v1` and comment on the pull request. |
+| `test` | boolean | `true` | Run Jest and publish a pull request report. |
+| `test-script` | string | `test` | Custom npm script for tests, for example `test:ci`. |
+| `audit` | boolean | `true` | Run `npm audit fix --package-lock-only` before tests and include `package-lock.json` changes in the automatic commit when needed. |
+| `audit-level` | string | `high` | Minimum npm audit level used by `npm audit fix`: `low`, `moderate`, `high`, or `critical`. |
+| `token` | string | — | PAT or `GITHUB_TOKEN` used by reviewdog to comment on the pull request. |
+| `github-token` | string | — | `GITHUB_TOKEN` or PAT used for checkout, push, and Jest report comments. |
+| `checkout` | boolean | `true` | Perform `actions/checkout` inside the action. Disable if your workflow already checks out. |
+| `node-version` | string | `22.x` | Node version, for example `20.x` or `22.x`. |
+| `bot_name` | string | `MeblabsBot` | Bot username used for automatic commits. |
+| `bot_email` | string | `github@meblabs.com` | Bot email used for automatic commits. |
 
-> **Note:** In v3.0 the npm steps (install/format/eslint/test) always run at the repo root. `working-directory` currently applies only to the auto-merge step context.
+---
+
+## Outputs
+
+| Name | Description |
+| ---- | ----------- |
+| `prettier-changed` | `true` if Prettier changed files and an automatic commit was pushed. |
+| `audit-changed` | `true` if npm audit changed `package-lock.json` and an automatic commit was pushed. |
+| `current-head-sha` | Current local `HEAD` SHA at the end of the action. |
+
+### Output behavior
+
+| Situation | `prettier-changed` | `audit-changed` | ESLint in same run | Jest in same run | Downstream jobs in same run |
+| --------- | -----------------: | --------------: | -----------------: | ---------------: | --------------------------: |
+| Prettier creates changes only | `true` | `false` | no | no | no |
+| npm audit creates changes only | `false` | `true` | no | no | no |
+| Prettier and npm audit both create changes | `true` | `true` | no | no | no |
+| No automatic changes | `false` | `false` | yes | yes | yes |
+
+A downstream job should run only when:
+
+```yml
+needs.quality.outputs.prettier-changed != 'true' &&
+needs.quality.outputs.audit-changed != 'true'
+```
+
+The commit to scan or validate is exposed as:
+
+```yml
+needs.quality.outputs.current-head-sha
+```
 
 ---
 
 ## Required job permissions
 
-Set permissions on the job that uses this action:
+Set permissions on the job that uses this action.
 
-- Always:
+Minimum permissions:
 
-  - `checks: write`
-  - `pull-requests: write`
-  - `contents: write`
+```yml
+permissions:
+  checks: write
+  pull-requests: write
+  contents: write
+  issues: write
+```
 
-- If you enable security:
+Why these are needed:
 
-  - `security-events: write`
-  - `issues: write`
-  - `actions: write` (to allow tools used during reporting)
+| Permission | Used for |
+| ---------- | -------- |
+| `checks: write` | Jest report/check output. |
+| `pull-requests: write` | Pull request review comments from reviewdog. |
+| `contents: write` | Checkout and push for automatic commits. |
+| `issues: write` | Pull request comments, because GitHub pull request comments use the Issues API. |
+
+If you disable automatic commits or avoid pull request comments, you can reduce permissions in the calling workflow.
 
 ---
 
-## Tokens & secrets (who does what)
+## Tokens and secrets
 
-| Purpose                                   | Input/Env                   | Recommended value                                                                               |
-| ----------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------- |
-| PR review comments (ESLint via reviewdog) | `token`                     | **PAT** (so you can also reuse it for `GH_TOKEN` in auto-merge)                                 |
-| Checkout/push & PR comments (Jest/SARIF)  | `github-token`              | `${{ secrets.GITHUB_TOKEN }}` or PAT                                                            |
-| Auto-merge (GitHub CLI)                   | `GH_TOKEN` = `inputs.token` | **PAT with `repo` scope** (recommended; `GITHUB_TOKEN` may not be sufficient for `gh pr merge`) |
-| Snyk auth                                 | `snyk-token`                | `${{ secrets.SNYK_TOKEN }}`                                                                     |
-| Snyk org                                  | `snyk-org`                  | Your Snyk org slug                                                                              |
+| Purpose | Input | Recommended value |
+| ------- | ----- | ----------------- |
+| Pull request review comments from ESLint/reviewdog | `token` | `${{ secrets.GITHUB_TOKEN }}` or a bot PAT |
+| Checkout, push, and Jest report comments | `github-token` | `${{ secrets.GITHUB_TOKEN }}` or a bot PAT |
+
+For private repositories, ensure the token used in `github-token` can push to the pull request branch when automatic commits are enabled.
 
 ---
 
 ## Usage
 
-### Minimal (lint + test, no security, no auto-merge)
+### Basic quality gate
 
 ```yml
 name: PullRequest
@@ -127,83 +243,32 @@ on:
     branches: [release, staging, dev]
 
 jobs:
-  pr:
+  quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       checks: write
       pull-requests: write
       contents: write
+      issues: write
     steps:
-      - name: NPM Pull Request
-        uses: meblabs/npm-pull-request-action@v3.0
+      - id: quality
+        name: NPM pull request quality gate
+        uses: meblabs/npm-pull-request-action@v4.0
         with:
-          token: ${{ secrets.MEBBOT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           node-version: 22.x
-          enable-security: false
-          enable-auto-merge: false
+          prettier: true
+          eslint: true
+          audit: true
+          audit-level: high
+          test: true
 ```
 
-### With Snyk security scan
+### Full example with checkout and private npm setup outside the action
 
-```yml
-jobs:
-  pr:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      checks: write
-      pull-requests: write
-      contents: write
-      security-events: write
-      issues: write
-      actions: write
-    steps:
-      - name: NPM Pull Request (with Snyk)
-        uses: meblabs/npm-pull-request-action@v3.0
-        with:
-          token: ${{ secrets.MEBBOT }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          enable-security: true
-          snyk-token: ${{ secrets.SNYK_TOKEN }}
-          snyk-org: ${{ secrets.SNYK_ORG }}
-          snyk-severity-threshold: high
-```
-
-> **Security behavior:** The Snyk job runs **only if the PR author is not** `bot_name`. On Snyk failure, a SARIF summary comment is posted on the PR.
-
-### With auto-merge for bot PRs
-
-```yml
-jobs:
-  pr:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      checks: write
-      pull-requests: write
-      contents: write
-    steps:
-      - name: NPM Pull Request (auto-merge)
-        uses: meblabs/npm-pull-request-action@v3.0
-        with:
-          token: ${{ secrets.MEBBOT }} # PAT with repo scope (used as GH_TOKEN)
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          enable-auto-merge: true
-          bot_name: MeblabsBot
-          bot_email: github@meblabs.com
-          protected-branches: "dev, staging, release" # CSV, spaces ok
-```
-
-> **Auto-merge behavior:**
->
-> - Triggers only if PR author **equals** `bot_name`.
-> - Requires **exactly one commit** in the PR.
-> - Skips auto-merge if the single commit appears to update a **pinned dependency** from `package.json` (dependency specified as a strict semver).
-> - After merging, deletes the source branch **unless** it is listed in `protected-branches`.
-
-### Full example (setup keys + everything)
+Use this when the repository requires custom npm authentication before `npm ci`.
 
 ```yml
 name: PullRequest
@@ -213,16 +278,18 @@ on:
     branches: [release, staging, dev]
 
 jobs:
-  pr:
+  quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       checks: write
       pull-requests: write
       contents: write
-      security-events: write
       issues: write
-      actions: write
+    outputs:
+      prettier-changed: ${{ steps.quality.outputs.prettier-changed }}
+      audit-changed: ${{ steps.quality.outputs.audit-changed }}
+      current-head-sha: ${{ steps.quality.outputs.current-head-sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -231,131 +298,390 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Setup keys
+      - name: Setup npm credentials
         env:
           FontAwesomeKey: ${{ secrets.FONT_AWESOME_KEY }}
         run: sed "s/__FontAwesomeKey__/${FontAwesomeKey}/g" .npmrc.template > .npmrc
 
-      - name: NPM Pull Request (lint/test/security/auto-merge)
-        uses: meblabs/npm-pull-request-action@v3.0
+      - id: quality
+        name: NPM pull request quality gate
+        uses: meblabs/npm-pull-request-action@v4.0
         with:
           checkout: false
           node-version: 22.x
-          token: ${{ secrets.MEBBOT }} # PAT used for reviewdog + gh merge
-          github-token: ${{ secrets.GITHUB_TOKEN }} # PR comments & checkout push
+          token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           prettier: true
           eslint: true
+          audit: true
+          audit-level: high
           test: true
-          enable-security: true
-          snyk-token: ${{ secrets.SNYK_TOKEN }}
-          snyk-org: ${{ secrets.SNYK_ORG }}
-          snyk-severity-threshold: high
-          enable-auto-merge: true
-          bot_name: MeblabsBot
-          bot_email: github@meblabs.com
-          protected-branches: "dev, staging, release"
-          allowed-branches: "dev"
 ```
 
 ---
 
-## Detailed behavior & logic
+## Detailed behavior and logic
+
+### Checkout
+
+Runs only if:
+
+```yml
+checkout: true
+```
+
+The action checks out the pull request head branch with:
+
+```yml
+fetch-depth: 0
+ref: ${{ github.event.pull_request.head.ref }}
+token: ${{ inputs.github-token }}
+```
+
+If your workflow already checks out the repository, set:
+
+```yml
+checkout: false
+```
+
+### Node setup
+
+The action configures Node.js with:
+
+```yml
+uses: actions/setup-node@v4
+with:
+  node-version: ${{ inputs.node-version }}
+  cache: npm
+```
+
+Default Node version:
+
+```text
+22.x
+```
+
+### Install dependencies
+
+The action installs dependencies with:
+
+```bash
+npm ci
+```
+
+This requires a committed and valid `package-lock.json`.
 
 ### Prettier
 
-- Runs if `prettier: true`.
-- If there are changes, commits with:
+Runs if:
 
-  - `user.name = bot_name`
-  - `user.email = bot_email`
-  - message: `chore: code formatted with prettier [skip ci]`
+```yml
+prettier: true
+```
 
-- Pushes back to the PR branch.
+Executes:
 
-### ESLint (reviewdog)
+```bash
+npm run format
+```
 
-- Runs if `eslint: true`.
-- Uses `reviewdog/action-eslint@v1` with flags: `. --ext .js`.
-  _(If you lint TS too, set up ESLint accordingly in your repo.)_
-- Uses `token` to post PR review comments.
+The action then checks whether the working tree changed.
+
+If Prettier produces changes, `prettier-changed` is set to `true`.
+
+The action does not commit immediately after Prettier. This allows npm audit to run in the same execution and lets the action create one consolidated automatic commit if either Prettier, npm audit, or both changed files.
+
+### npm audit lockfile remediation
+
+Runs if:
+
+```yml
+audit: true
+```
+
+Executes:
+
+```bash
+npm audit fix --package-lock-only --audit-level=<audit-level>
+```
+
+The action explicitly rejects automatic changes to `package.json`.
+
+If `package.json` is modified by npm audit, the action:
+
+- prints an error;
+- reverts `package.json` and `package-lock.json`;
+- fails the job.
+
+If `package-lock.json` changes, `audit-changed` is set to `true`.
+
+This remediation is intentionally limited to the lockfile. It is meant to apply compatible vulnerability fixes without changing declared dependency ranges, introducing new direct dependencies, or using `npm audit fix --force`.
+
+### Automatic commit
+
+If either Prettier or npm audit produced changes, the action creates one automatic commit with:
+
+```text
+chore: apply automatic formatting and lockfile fixes
+```
+
+The commit is pushed to the pull request branch using the configured bot identity.
+
+The commit does **not** include `[skip ci]`.
+
+This is intentional. The next workflow execution must run on the newly pushed commit.
+
+When an automatic commit is created:
+
+- ESLint does not run in the same action execution;
+- Jest does not run in the same action execution;
+- downstream validation jobs should not run in the same workflow execution;
+- the workflow should run again on the newly pushed commit.
+
+### ESLint reviewdog
+
+Runs if:
+
+```yml
+eslint: true
+```
+
+and only if no automatic commit was created by Prettier or npm audit.
+
+Uses:
+
+```yml
+reviewdog/action-eslint@v1
+```
+
+Default ESLint flags:
+
+```text
+. --ext .js,.jsx,.mjs,.cjs
+```
+
+The `token` input is used to post pull request review comments.
 
 ### Jest
 
-- Runs if `test: true` with:
+Runs if:
 
-  ```
-  npm run <test-script> -- --ci --json --outputFile=jest-results.json
-  ```
+```yml
+test: true
+```
 
-- Always publishes a PR report (even on failure) with `im-open/process-jest-test-results@v2`.
+and only if no automatic commit was created by Prettier or npm audit.
 
-### Security (Snyk)
+Executes:
 
-- Runs if `enable-security: true` **and** PR author ≠ `bot_name`.
-- Uses `snyk/actions/node@master` with:
+```bash
+npm run <test-script> -- --ci --json --outputFile=jest-results.json
+```
 
-  - `--sarif-file-output=snyk.sarif`
-  - `--org=<snyk-org>`
-  - `--severity-threshold=<snyk-severity-threshold>`
+The Jest execution step is currently non-blocking so that the Jest report can be published even when tests fail.
 
-- If the Snyk step fails, posts a **SARIF summary comment** on the PR.
+The report is published with:
 
-### Auto-merge (GitHub CLI)
+```yml
+im-open/process-jest-test-results@v2
+```
 
-- Runs if `enable-auto-merge: true` **and** PR author = `bot_name`.
-- Requires **one commit** only; otherwise, exits without merging.
-- Reads `package.json` and if the commit message looks like:
+### Quality outputs
 
-  ```
-  fix: upgrade <dep> from 1.2.0 to 1.3.0
-  ```
+At the end of every run, the action writes a GitHub step summary with:
 
-  and `<dep>` is **pinned** (strict semver) in `dependencies`, auto-merge is **skipped**.
+- whether Prettier changed files;
+- whether npm audit changed the lockfile;
+- the current local `HEAD` SHA.
 
-- Merges with `--auto --merge`.
-- Branch deletion:
+The outputs are intentionally minimal:
 
-  - **Not deleted** if the head ref is in `protected-branches` (CSV, trimmed, exact match).
-  - Deleted otherwise (`--delete-branch`).
+```text
+prettier-changed
+audit-changed
+current-head-sha
+```
+
+Use `prettier-changed` and `audit-changed` to decide whether downstream jobs should run.
+
+A downstream job should run only when both values are not `true`:
+
+```yml
+if: |
+  needs.quality.outputs.prettier-changed != 'true' &&
+  needs.quality.outputs.audit-changed != 'true'
+```
+
+Use `current-head-sha` as the commit reference for downstream validation:
+
+```yml
+ref: ${{ needs.quality.outputs.current-head-sha }}
+```
 
 ---
 
 ## Troubleshooting / FAQ
 
-**Auto-merge didn’t run. Why?**
-Check all of the following:
+### Prettier changed files and Jest did not run
 
-- `enable-auto-merge: true`
-- PR author equals `bot_name`
-- PR has **exactly one commit**
-- The commit is **not** updating a pinned dependency listed in `package.json`
-- `token` is a **PAT with `repo` scope** (used as `GH_TOKEN` by `gh pr merge`)
+This is expected.
 
-**No SARIF comment from Snyk.**
+The action pushed an automatic commit. The workflow should run again on the new commit. Jest should run in the next execution if no further automatic changes are produced.
 
-- Ensure `enable-security: true` and the PR author is **not** `bot_name`.
-- The comment is posted **only if the Snyk step fails**.
-- Ensure job permissions include `security-events: write`, `issues: write`, `actions: write`.
-- Ensure `snyk-token` and `snyk-org` are set.
+### npm audit changed package-lock.json and Jest did not run
 
-**I already checkout earlier in the workflow.**
+This is expected.
 
-- Set `checkout: false` in the action inputs.
+The action pushed an automatic commit. The workflow should run again on the new commit. Jest should run in the next execution if no further automatic changes are produced.
 
-**Custom monorepo folder?**
+### Prettier and npm audit both changed files
 
-- In v3.0, npm steps run at the repo root. `working-directory` currently applies only to the auto-merge step context.
+This is expected.
+
+The action creates one consolidated automatic commit containing both the formatting changes and the lockfile remediation.
+
+### Why do automatic commits not use `[skip ci]`?
+
+Because tests and downstream validation jobs must run on the new commit.
+
+Using `[skip ci]` would prevent the new workflow execution and could leave a pull request with automatically modified files that were not tested or validated by downstream jobs.
+
+### npm audit tried to change package.json
+
+The action fails and reverts `package.json` and `package-lock.json`.
+
+Automatic audit remediation is allowed only for `package-lock.json`. Any remediation that requires changing `package.json`, changing dependency ranges, or using `--force` must be handled manually in a dedicated pull request.
+
+### package-lock.json is missing
+
+If `audit: true`, the npm audit remediation step is skipped when `package-lock.json` is absent.
+
+However, `npm ci` requires a valid lockfile. For normal use, commit `package-lock.json`.
+
+### No ESLint comments appear on the pull request
+
+Check that:
+
+- `eslint: true` is set;
+- `token` is set;
+- job permissions include `pull-requests: write`;
+- the workflow event is `pull_request`;
+- no automatic commit was created earlier in the same run.
+
+### No Jest comment appears on the pull request
+
+Check that:
+
+- `test: true` is set;
+- `github-token` is set;
+- job permissions include `checks: write` and `issues: write`;
+- no automatic commit was created earlier in the same run.
+
+### I already checkout earlier in the workflow
+
+Set:
+
+```yml
+checkout: false
+```
+
+### I use private npm packages
+
+Perform checkout and npm authentication before this action, then call this action with:
+
+```yml
+checkout: false
+```
+
+---
+
+## Integration with MEBlabs Security Workflow
+
+This action is focused only on the npm pull request quality gate.
+
+For security scanning, use the separate MEBlabs Security Workflow repository:
+
+<https://github.com/meblabs/security-workflow>
+
+The recommended integration is to run this quality action first, then run the security reusable workflow only when this action did not create an automatic commit.
+
+Example:
+
+```yml
+name: PullRequest
+
+on:
+  pull_request:
+    branches: [release, staging, dev]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: write
+      issues: write
+    outputs:
+      prettier-changed: ${{ steps.quality.outputs.prettier-changed }}
+      audit-changed: ${{ steps.quality.outputs.audit-changed }}
+      current-head-sha: ${{ steps.quality.outputs.current-head-sha }}
+    steps:
+      - id: quality
+        name: NPM pull request quality gate
+        uses: meblabs/npm-pull-request-action@v4.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: 22.x
+          prettier: true
+          eslint: true
+          audit: true
+          audit-level: high
+          test: true
+
+  security:
+    needs: quality
+    if: |
+      needs.quality.outputs.prettier-changed != 'true' &&
+      needs.quality.outputs.audit-changed != 'true'
+    uses: meblabs/security-workflow/.github/workflows/security.yml@v1
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: read
+      security-events: write
+    with:
+      ref: ${{ needs.quality.outputs.current-head-sha }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+With this structure:
+
+- this action remains independently usable as the npm quality gate;
+- security scanning is isolated in its own reusable workflow;
+- security does not run on an obsolete commit if Prettier or npm audit pushed automatic changes;
+- security scans the exact `current-head-sha` validated by the quality action.
 
 ---
 
 ## Changelog
 
-### v3.0
+### v4.0
 
-- Added **Security** (Snyk) and **Auto-merge** features with input flags
-- Bot-aware execution: security runs only for non-bot PRs; auto-merge runs only for bot PRs
-- SARIF PR comment on Snyk failure
-- Protected branches handled as **CSV with trimming**
-- Configurable bot identity (`bot_name`, `bot_email`)
-- Snyk severity threshold input
-- Single-commit and pinned-dependency safeguards for auto-merge
+- Renamed the action back to **NPM Pull Request Action**.
+- Removed the embedded security gate from this composite action.
+- Removed all security-specific inputs and steps.
+- Focused the action on npm pull request quality checks: install, Prettier, npm audit lockfile remediation, ESLint, and Jest.
+- Added controlled npm audit lockfile remediation before tests.
+- Changed automatic commit handling so Prettier and npm audit changes are committed together in one consolidated commit when possible.
+- Removed `[skip ci]` from automatic Prettier and npm audit commits.
+- Added compact output flags for downstream workflow orchestration.
+- Added `prettier-changed`, `audit-changed`, and `current-head-sha` outputs.
+- Downstream job execution can be controlled by checking that neither `prettier-changed` nor `audit-changed` is `true`.
+- Documented optional integration with the separate MEBlabs Security Workflow repository.
+- Ensured ESLint and Jest run only when no automatic commit was created in the current action execution.
+- Preserved automatic commit protection: npm audit may update `package-lock.json`, but automatic `package.json` changes are rejected.
