@@ -248,6 +248,7 @@ concurrency:
 
 jobs:
   quality:
+    name: Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -287,6 +288,7 @@ concurrency:
 
 jobs:
   quality:
+    name: Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -553,6 +555,7 @@ concurrency:
 
 jobs:
   quality:
+    name: Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -579,6 +582,7 @@ jobs:
           test: true
 
   security:
+    name: Security Gate
     needs: quality
     if: |
       needs.quality.outputs.prettier-changed != 'true' &&
@@ -592,6 +596,9 @@ jobs:
       security-events: write
     with:
       ref: ${{ needs.quality.outputs.current-head-sha }}
+      repository: ${{ github.repository }}
+      pr-number: ${{ github.event.pull_request.number }}
+      head-ref: ${{ github.head_ref }}
     secrets:
       token: ${{ secrets.MEBBOT }}
       github-token: ${{ secrets.GITHUB_TOKEN }}
