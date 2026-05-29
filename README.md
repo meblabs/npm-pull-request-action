@@ -224,8 +224,8 @@ If you disable automatic commits or avoid pull request comments, you can reduce 
 
 | Purpose | Input | Recommended value |
 | ------- | ----- | ----------------- |
-| Pull request review comments from ESLint/reviewdog | `token` | `${{ secrets.GITHUB_TOKEN }}` or a bot PAT |
-| Checkout, push, and Jest report comments | `github-token` | `${{ secrets.GITHUB_TOKEN }}` or a bot PAT |
+| Pull request review comments from ESLint/reviewdog | `token` | `${{ secrets.MEBBOT }}` or a bot PAT |
+| Checkout, push, and Jest report comments | `github-token` | `${{ secrets.GITHUB_TOKEN }}` |
 
 For private repositories, ensure the token used in `github-token` can push to the pull request branch when automatic commits are enabled.
 
@@ -242,6 +242,10 @@ on:
   pull_request:
     branches: [release, staging, dev]
 
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -256,7 +260,7 @@ jobs:
         name: NPM pull request quality gate
         uses: meblabs/npm-pull-request-action@v4.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.MEBBOT }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           node-version: 22.x
           prettier: true
@@ -277,6 +281,10 @@ on:
   pull_request:
     branches: [release, staging, dev]
 
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -292,7 +300,7 @@ jobs:
       current-head-sha: ${{ steps.quality.outputs.current-head-sha }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -308,9 +316,9 @@ jobs:
         uses: meblabs/npm-pull-request-action@v4.0
         with:
           checkout: false
-          node-version: 22.x
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.MEBBOT }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: 22.x
           prettier: true
           eslint: true
           audit: true
@@ -349,7 +357,7 @@ checkout: false
 The action configures Node.js with:
 
 ```yml
-uses: actions/setup-node@v4
+uses: actions/setup-node@v5
 with:
   node-version: ${{ inputs.node-version }}
   cache: npm
@@ -520,81 +528,6 @@ ref: ${{ needs.quality.outputs.current-head-sha }}
 
 ---
 
-## Troubleshooting / FAQ
-
-### Prettier changed files and Jest did not run
-
-This is expected.
-
-The action pushed an automatic commit. The workflow should run again on the new commit. Jest should run in the next execution if no further automatic changes are produced.
-
-### npm audit changed package-lock.json and Jest did not run
-
-This is expected.
-
-The action pushed an automatic commit. The workflow should run again on the new commit. Jest should run in the next execution if no further automatic changes are produced.
-
-### Prettier and npm audit both changed files
-
-This is expected.
-
-The action creates one consolidated automatic commit containing both the formatting changes and the lockfile remediation.
-
-### Why do automatic commits not use `[skip ci]`?
-
-Because tests and downstream validation jobs must run on the new commit.
-
-Using `[skip ci]` would prevent the new workflow execution and could leave a pull request with automatically modified files that were not tested or validated by downstream jobs.
-
-### npm audit tried to change package.json
-
-The action fails and reverts `package.json` and `package-lock.json`.
-
-Automatic audit remediation is allowed only for `package-lock.json`. Any remediation that requires changing `package.json`, changing dependency ranges, or using `--force` must be handled manually in a dedicated pull request.
-
-### package-lock.json is missing
-
-If `audit: true`, the npm audit remediation step is skipped when `package-lock.json` is absent.
-
-However, `npm ci` requires a valid lockfile. For normal use, commit `package-lock.json`.
-
-### No ESLint comments appear on the pull request
-
-Check that:
-
-- `eslint: true` is set;
-- `token` is set;
-- job permissions include `pull-requests: write`;
-- the workflow event is `pull_request`;
-- no automatic commit was created earlier in the same run.
-
-### No Jest comment appears on the pull request
-
-Check that:
-
-- `test: true` is set;
-- `github-token` is set;
-- job permissions include `checks: write` and `issues: write`;
-- no automatic commit was created earlier in the same run.
-
-### I already checkout earlier in the workflow
-
-Set:
-
-```yml
-checkout: false
-```
-
-### I use private npm packages
-
-Perform checkout and npm authentication before this action, then call this action with:
-
-```yml
-checkout: false
-```
-
----
-
 ## Integration with MEBlabs Security Workflow
 
 This action is focused only on the npm pull request quality gate.
@@ -614,6 +547,10 @@ on:
   pull_request:
     branches: [release, staging, dev]
 
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -632,7 +569,7 @@ jobs:
         name: NPM pull request quality gate
         uses: meblabs/npm-pull-request-action@v4.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.MEBBOT }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           node-version: 22.x
           prettier: true
@@ -656,6 +593,7 @@ jobs:
     with:
       ref: ${{ needs.quality.outputs.current-head-sha }}
     secrets:
+      token: ${{ secrets.MEBBOT }}
       github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 

@@ -65,21 +65,22 @@ runs:
   steps:
     - if: ${{ inputs.checkout == 'true' }}
       name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
         ref: ${{ github.event.pull_request.head.ref }}
-        token: ${{ inputs.github-token }}
+        token:  ${{ inputs.token }}
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: ${{ inputs.node-version }}
         cache: npm
+        cache-dependency-path: package-lock.json
 
     - name: Install dependencies
       shell: bash
-      run: npm ci
+      run: npm ci --prefer-offline --no-audit
 
     - if: ${{ inputs.prettier == 'true' }}
       name: Run Prettier
