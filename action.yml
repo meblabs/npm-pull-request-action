@@ -175,7 +175,7 @@ runs:
     - if: ${{ (success() || failure()) && inputs.test == 'true' && steps.prettier.outputs.changes != 'true' && steps.audit.outputs.changes != 'true' }}
       name: Publish Jest report
       # im-open/* is not in the ref-pin allowlist, so it is hash-pinned.
-      uses: im-open/process-jest-test-results@68d0480514af6bee2a1aee9b447ee5b623816ab4 # v2.2.2
+      uses: im-open/process-jest-test-results@3b73b8f2a22032eb329cfe08bc68d207cf8e626a # v3.0.0
       with:
         github-token: ${{ inputs.github-token }}
         results-file: jest-results.json
