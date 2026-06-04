@@ -65,14 +65,14 @@ runs:
   steps:
     - if: ${{ inputs.checkout == 'true' }}
       name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
         ref: ${{ github.event.pull_request.head.ref }}
         token:  ${{ inputs.token }}
 
     - name: Setup Node.js
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
         cache: npm
@@ -153,7 +153,8 @@ runs:
 
     - if: ${{ inputs.eslint == 'true' && steps.prettier.outputs.changes != 'true' && steps.audit.outputs.changes != 'true' }}
       name: Run ESLint
-      uses: reviewdog/action-eslint@v1
+      # reviewdog/* is not in the ref-pin allowlist, so it is hash-pinned.
+      uses: reviewdog/action-eslint@556a3fdaf8b4201d4d74d406013386aa4f7dab96 # v1.34.0
       with:
         reporter: github-pr-review
         eslint_flags: ". --ext .js,.jsx,.mjs,.cjs"
@@ -173,7 +174,8 @@ runs:
 
     - if: ${{ (success() || failure()) && inputs.test == 'true' && steps.prettier.outputs.changes != 'true' && steps.audit.outputs.changes != 'true' }}
       name: Publish Jest report
-      uses: im-open/process-jest-test-results@v2
+      # im-open/* is not in the ref-pin allowlist, so it is hash-pinned.
+      uses: im-open/process-jest-test-results@68d0480514af6bee2a1aee9b447ee5b623816ab4 # v2.2.2
       with:
         github-token: ${{ inputs.github-token }}
         results-file: jest-results.json

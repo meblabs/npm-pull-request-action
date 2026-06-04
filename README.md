@@ -1,15 +1,15 @@
 # NPM Pull Request Action
 
-![version](https://img.shields.io/badge/version-4.0-blue)
+[![zizmor](https://github.com/meblabs/npm-pull-request-action/actions/workflows/zizmor.yml/badge.svg)](https://github.com/meblabs/npm-pull-request-action/actions/workflows/zizmor.yml)
 ![type](https://img.shields.io/badge/type-Composite%20Action-2ea44f)
-![node](<https://img.shields.io/badge/Node-22.x%20(default)-informational>)
-![prettier](https://img.shields.io/badge/Prettier-optional-success)
-![eslint](https://img.shields.io/badge/ESLint-optional-success)
-![jest](https://img.shields.io/badge/Jest-optional-success)
-![audit](https://img.shields.io/badge/npm%20audit-lockfile%20only-success)
 [![](https://img.shields.io/static/v1?label=MEBlabs&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/meblabs)
 
 **GitHub Action for MEBlabs pull requests in npm projects.**
+
+> [!IMPORTANT]
+> This action relies on `actions/checkout@v6` and `actions/setup-node@v6`, which run
+> on the Node 24 runtime. Use it on `ubuntu-latest` or a self-hosted runner with agent
+> `>= v2.327.1`.
 
 This composite action manages the npm pull request quality gate for JavaScript, Node.js, React, and npm-based projects.
 
@@ -259,7 +259,7 @@ jobs:
     steps:
       - id: quality
         name: NPM pull request quality gate
-        uses: meblabs/npm-pull-request-action@v4.0
+        uses: meblabs/npm-pull-request-action@v4
         with:
           token: ${{ secrets.MEBBOT }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -302,7 +302,7 @@ jobs:
       current-head-sha: ${{ steps.quality.outputs.current-head-sha }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -315,7 +315,7 @@ jobs:
 
       - id: quality
         name: NPM pull request quality gate
-        uses: meblabs/npm-pull-request-action@v4.0
+        uses: meblabs/npm-pull-request-action@v4
         with:
           checkout: false
           token: ${{ secrets.MEBBOT }}
@@ -359,7 +359,7 @@ checkout: false
 The action configures Node.js with:
 
 ```yml
-uses: actions/setup-node@v5
+uses: actions/setup-node@v6
 with:
   node-version: ${{ inputs.node-version }}
   cache: npm
@@ -570,7 +570,7 @@ jobs:
     steps:
       - id: quality
         name: NPM pull request quality gate
-        uses: meblabs/npm-pull-request-action@v4.0
+        uses: meblabs/npm-pull-request-action@v4
         with:
           token: ${{ secrets.MEBBOT }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
