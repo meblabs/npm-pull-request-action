@@ -152,8 +152,8 @@ The npm steps install, format, audit, lint, and test always run at the repositor
 | `test-script` | string | `test` | Custom npm script for tests, for example `test:ci`. |
 | `audit` | boolean | `true` | Run `npm audit fix --package-lock-only` before tests and include `package-lock.json` changes in the automatic commit when needed. |
 | `audit-level` | string | `high` | Minimum npm audit level used by `npm audit fix`: `low`, `moderate`, `high`, or `critical`. |
-| `token` | string | — | PAT or `GITHUB_TOKEN` used by reviewdog to comment on the pull request. |
-| `github-token` | string | — | `GITHUB_TOKEN` or PAT used for checkout, push, and Jest report comments. |
+| `token` | string | — | PAT or `GITHUB_TOKEN` used for checkout, the automatic-commit push, and reviewdog pull request review comments. |
+| `github-token` | string | — | `GITHUB_TOKEN` or PAT used to publish the Jest report comment on the pull request. |
 | `checkout` | boolean | `true` | Perform `actions/checkout` inside the action. Disable if your workflow already checks out. |
 | `node-version` | string | `22.x` | Node version, for example `20.x` or `22.x`. |
 | `bot_name` | string | `MeblabsBot` | Bot username used for automatic commits. |
@@ -224,10 +224,10 @@ If you disable automatic commits or avoid pull request comments, you can reduce 
 
 | Purpose | Input | Recommended value |
 | ------- | ----- | ----------------- |
-| Pull request review comments from ESLint/reviewdog | `token` | `${{ secrets.MEBBOT }}` or a bot PAT |
-| Checkout, push, and Jest report comments | `github-token` | `${{ secrets.GITHUB_TOKEN }}` |
+| Checkout, automatic-commit push, and ESLint/reviewdog review comments | `token` | `${{ secrets.MEBBOT }}` or a bot PAT |
+| Jest report comment | `github-token` | `${{ secrets.GITHUB_TOKEN }}` |
 
-For private repositories, ensure the token used in `github-token` can push to the pull request branch when automatic commits are enabled.
+For private repositories, ensure the token used in `token` can push to the pull request branch when automatic commits are enabled.
 
 ---
 
@@ -345,8 +345,11 @@ The action checks out the pull request head branch with:
 ```yml
 fetch-depth: 0
 ref: ${{ github.event.pull_request.head.ref }}
-token: ${{ inputs.github-token }}
+token: ${{ inputs.token }}
+persist-credentials: false
 ```
+
+The token is not persisted to `.git/config`. When an automatic commit is created, it is pushed using an explicit token-authenticated remote built from `token`, so the credential is never written to disk or leaked through workflow artifacts.
 
 If your workflow already checks out the repository, set:
 

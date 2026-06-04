@@ -69,7 +69,8 @@ runs:
       with:
         fetch-depth: 0
         ref: ${{ github.event.pull_request.head.ref }}
-        token:  ${{ inputs.token }}
+        token: ${{ inputs.token }}
+        persist-credentials: false
 
     - name: Setup Node.js
       uses: actions/setup-node@v6
@@ -128,11 +129,16 @@ runs:
     - if: ${{ steps.prettier.outputs.changes == 'true' || steps.audit.outputs.changes == 'true' }}
       name: Commit automatic changes
       shell: bash
+      env:
+        BOT_NAME: ${{ inputs.bot_name }}
+        BOT_EMAIL: ${{ inputs.bot_email }}
+        PUSH_TOKEN: ${{ inputs.token }}
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
       run: |
         set -euo pipefail
 
-        git config user.name '${{ inputs.bot_name }}'
-        git config user.email '${{ inputs.bot_email }}'
+        git config user.name "$BOT_NAME"
+        git config user.email "$BOT_EMAIL"
 
         git add --all
 
@@ -142,7 +148,13 @@ runs:
         fi
 
         git commit -m "chore: apply automatic formatting and lockfile fixes"
-        git push
+
+        # Checkout runs with persist-credentials: false, so push with an explicit
+        # token-authenticated remote. Token comes from env (masked in logs) and is
+        # not written to .git/config.
+        git push \
+          "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+          "HEAD:${HEAD_REF}"
 
     - if: ${{ steps.prettier.outputs.changes == 'true' || steps.audit.outputs.changes == 'true' }}
       name: Report automatic commit
@@ -165,9 +177,10 @@ runs:
       shell: bash
       env:
         JEST_JUNIT_OUTPUT: junit.xml
+        TEST_SCRIPT: ${{ inputs.test-script }}
       continue-on-error: true
       run: |
-        npm run ${{ inputs.test-script }} -- \
+        npm run "$TEST_SCRIPT" -- \
           --ci \
           --json \
           --outputFile=jest-results.json
