@@ -65,7 +65,7 @@ runs:
   steps:
     - if: ${{ inputs.checkout == 'true' }}
       name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
       with:
         fetch-depth: 0
         ref: ${{ github.event.pull_request.head.ref }}
