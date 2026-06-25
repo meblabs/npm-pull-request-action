@@ -18,6 +18,10 @@ inputs:
     required: false
     description: "A custom npm script to run tests"
     default: "test"
+  test-args:
+    required: false
+    description: "Arguments appended after `--` to the test script. Defaults to the Jest CLI flags that produce the report consumed by the publish step. Set to an empty string when your custom test-script does not accept these flags (the Jest report is then skipped)."
+    default: "--ci --json --outputFile=jest-results.json"
   audit:
     description: "Run npm audit fix --package-lock-only and commit package-lock.json changes before tests"
     required: false
@@ -178,14 +182,18 @@ runs:
       env:
         JEST_JUNIT_OUTPUT: junit.xml
         TEST_SCRIPT: ${{ inputs.test-script }}
+        TEST_ARGS: ${{ inputs.test-args }}
       continue-on-error: true
       run: |
-        npm run "$TEST_SCRIPT" -- \
-          --ci \
-          --json \
-          --outputFile=jest-results.json
+        # Word-splitting of TEST_ARGS is intentional: it is a list of CLI flags.
+        read -ra extra_args <<< "$TEST_ARGS"
+        if [[ ${#extra_args[@]} -gt 0 ]]; then
+          npm run "$TEST_SCRIPT" -- "${extra_args[@]}"
+        else
+          npm run "$TEST_SCRIPT"
+        fi
 
-    - if: ${{ (success() || failure()) && inputs.test == 'true' && steps.prettier.outputs.changes != 'true' && steps.audit.outputs.changes != 'true' }}
+    - if: ${{ (success() || failure()) && inputs.test == 'true' && steps.prettier.outputs.changes != 'true' && steps.audit.outputs.changes != 'true' && hashFiles('jest-results.json') != '' }}
       name: Publish Jest report
       # im-open/* is not in the ref-pin allowlist, so it is hash-pinned.
       uses: im-open/process-jest-test-results@3b73b8f2a22032eb329cfe08bc68d207cf8e626a # v3.0.0

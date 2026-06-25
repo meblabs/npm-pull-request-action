@@ -150,6 +150,7 @@ The npm steps install, format, audit, lint, and test always run at the repositor
 | `eslint` | boolean | `true` | Run ESLint via `reviewdog/action-eslint@v1` and comment on the pull request. |
 | `test` | boolean | `true` | Run Jest and publish a pull request report. |
 | `test-script` | string | `test` | Custom npm script for tests, for example `test:ci`. |
+| `test-args` | string | `--ci --json --outputFile=jest-results.json` | Arguments appended after `--` to the test script. Defaults to the Jest CLI flags that generate the report. Set to an empty string if your custom `test-script` does not accept these flags — the Jest report is then skipped. |
 | `audit` | boolean | `true` | Run `npm audit fix --package-lock-only` before tests and include `package-lock.json` changes in the automatic commit when needed. |
 | `audit-level` | string | `high` | Minimum npm audit level used by `npm audit fix`: `low`, `moderate`, `high`, or `critical`. |
 | `token` | string | — | PAT or `GITHUB_TOKEN` used for checkout, the automatic-commit push, and reviewdog pull request review comments. |
@@ -488,10 +489,12 @@ and only if no automatic commit was created by Prettier or npm audit.
 Executes:
 
 ```bash
-npm run <test-script> -- --ci --json --outputFile=jest-results.json
+npm run <test-script> -- <test-args>
 ```
 
-The Jest execution step is currently non-blocking so that the Jest report can be published even when tests fail.
+`test-args` defaults to `--ci --json --outputFile=jest-results.json`. Those flags make Jest emit the `jest-results.json` file consumed by the report step. If your `test-script` is not Jest (or does not accept those flags), override `test-args` with values your script supports, or set it to an empty string to run `npm run <test-script>` with no extra arguments. When `test-args` is empty the arguments and the trailing `--` are omitted entirely.
+
+The Jest execution step is currently non-blocking so that the Jest report can be published even when tests fail. The report step runs only when `jest-results.json` was actually produced, so a custom `test-args` that does not generate it simply skips the report instead of failing the run.
 
 The report is published with:
 
