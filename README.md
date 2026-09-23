@@ -476,6 +476,8 @@ Default ESLint flags:
 
 The `token` input is used to post pull request review comments.
 
+When a pull request diff is too large for the GitHub API, reviewdog computes it with git instead. With `checkout: true` the action already has the full history, so reviewdog diffs locally without fetching (`REVIEWDOG_SKIP_GIT_FETCH`). With `checkout: false`, reviewdog still fetches the two commits it needs, so on private repositories your checkout must persist credentials (the `actions/checkout` default).
+
 ### Jest
 
 Runs if:

@@ -171,6 +171,12 @@ runs:
       name: Run ESLint
       # reviewdog/* is not in the ref-pin allowlist, so it is hash-pinned.
       uses: reviewdog/action-eslint@556a3fdaf8b4201d4d74d406013386aa4f7dab96 # v1.34.0
+      env:
+        # When the pull request diff is too large for the GitHub API, reviewdog
+        # falls back to `git fetch`, which has no credentials because checkout
+        # does not persist them. The action's own checkout already has the full
+        # history, so let reviewdog diff locally without fetching.
+        REVIEWDOG_SKIP_GIT_FETCH: ${{ inputs.checkout }}
       with:
         reporter: github-pr-review
         eslint_flags: ". --ext .js,.jsx,.mjs,.cjs"
