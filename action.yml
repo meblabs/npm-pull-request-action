@@ -169,8 +169,12 @@ runs:
 
     - if: ${{ inputs.eslint == 'true' && steps.prettier.outputs.changes != 'true' && steps.audit.outputs.changes != 'true' }}
       name: Run ESLint
+      id: eslint
       # reviewdog/* is not in the ref-pin allowlist, so it is hash-pinned.
       uses: reviewdog/action-eslint@556a3fdaf8b4201d4d74d406013386aa4f7dab96 # v1.34.0
+      # ESLint errors on the lines changed by the pull request fail the action,
+      # but only at the end, so that the tests and the Jest report still run.
+      continue-on-error: true
       env:
         # When the pull request diff is too large for the GitHub API, reviewdog
         # falls back to `git fetch`, which has no credentials because checkout
@@ -181,14 +185,17 @@ runs:
         reporter: github-pr-review
         eslint_flags: ". --ext .js,.jsx,.mjs,.cjs"
         github_token: ${{ inputs.token }}
+        fail_level: error
 
     - if: ${{ inputs.test == 'true' && steps.prettier.outputs.changes != 'true' && steps.audit.outputs.changes != 'true' }}
       name: Run Jest
+      id: jest
       shell: bash
       env:
         JEST_JUNIT_OUTPUT: junit.xml
         TEST_SCRIPT: ${{ inputs.test-script }}
         TEST_ARGS: ${{ inputs.test-args }}
+      # Failing tests fail the action at the end, once the Jest report is published.
       continue-on-error: true
       run: |
         # Word-splitting of TEST_ARGS is intentional: it is a list of CLI flags.
@@ -216,6 +223,8 @@ runs:
       env:
         PRETTIER_CHANGED: ${{ steps.prettier.outputs.changes }}
         AUDIT_CHANGED: ${{ steps.audit.outputs.changes }}
+        ESLINT_OUTCOME: ${{ steps.eslint.outcome }}
+        JEST_OUTCOME: ${{ steps.jest.outcome }}
       run: |
         set -euo pipefail
 
@@ -236,6 +245,24 @@ runs:
           echo "|---|---:|"
           echo "| Prettier changed files | ${prettier_changed} |"
           echo "| npm audit changed lockfile | ${audit_changed} |"
+          echo "| ESLint | ${ESLINT_OUTCOME:-skipped} |"
+          echo "| Tests | ${JEST_OUTCOME:-skipped} |"
           echo "| Current HEAD SHA | ${current_head_sha} |"
           echo ""
         } >> "$GITHUB_STEP_SUMMARY"
+
+    # Last, so that the report, the outputs and the summary are always written.
+    - if: ${{ steps.eslint.outcome == 'failure' || steps.jest.outcome == 'failure' }}
+      name: Fail on ESLint errors or failing tests
+      shell: bash
+      env:
+        ESLINT_OUTCOME: ${{ steps.eslint.outcome }}
+        JEST_OUTCOME: ${{ steps.jest.outcome }}
+      run: |
+        if [[ "$ESLINT_OUTCOME" == "failure" ]]; then
+          echo "::error title=ESLint::ESLint found errors on the lines changed by the pull request (see the review comments), or reviewdog could not run."
+        fi
+        if [[ "$JEST_OUTCOME" == "failure" ]]; then
+          echo "::error title=Tests::Tests failed (see the Jest Tests report)."
+        fi
+        exit 1

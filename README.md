@@ -65,12 +65,13 @@ It can also work together with the separate MEBlabs Security Workflow, as descri
 
    - Uses `reviewdog/action-eslint@v1`.
    - Comments findings directly on the pull request.
+   - ESLint errors on the changed lines fail the action at the end, after the tests.
    - Runs only if no automatic commit was created by Prettier or npm audit.
 
 6. **Jest**
 
    - Runs tests.
-   - Publishes a pull request report even if tests fail.
+   - Publishes a pull request report even if tests fail, then fails the action.
    - Runs only if no automatic commit was created by Prettier or npm audit.
 
 7. **Downstream workflow coordination**
@@ -478,6 +479,8 @@ The `token` input is used to post pull request review comments.
 
 When a pull request diff is too large for the GitHub API, reviewdog computes it with git instead. With `checkout: true` the action already has the full history, so reviewdog diffs locally without fetching (`REVIEWDOG_SKIP_GIT_FETCH`). With `checkout: false`, reviewdog still fetches the two commits it needs, so on private repositories your checkout must persist credentials (the `actions/checkout` default).
 
+ESLint runs with `fail_level: error`: an ESLint error on a line changed by the pull request (warnings do not count, nor do errors elsewhere in the repository), or a reviewdog failure, fails the action. The failure is applied at the end, so Jest, the Jest report, and the outputs still run first.
+
 ### Jest
 
 Runs if:
@@ -496,7 +499,7 @@ npm run <test-script> -- <test-args>
 
 `test-args` defaults to `--ci --json --outputFile=jest-results.json`. Those flags make Jest emit the `jest-results.json` file consumed by the report step. If your `test-script` is not Jest (or does not accept those flags), override `test-args` with values your script supports, or set it to an empty string to run `npm run <test-script>` with no extra arguments. When `test-args` is empty the arguments and the trailing `--` are omitted entirely.
 
-The Jest execution step is currently non-blocking so that the Jest report can be published even when tests fail. The report step runs only when `jest-results.json` was actually produced, so a custom `test-args` that does not generate it simply skips the report instead of failing the run.
+When tests fail, the action keeps going so that the Jest report is published, then fails at the end: the job shows as failed, not only the *Jest Tests* check. The report step runs only when `jest-results.json` was actually produced, so a custom `test-args` that does not generate it simply skips the report instead of failing the run.
 
 The report is published with:
 
@@ -510,6 +513,7 @@ At the end of every run, the action writes a GitHub step summary with:
 
 - whether Prettier changed files;
 - whether npm audit changed the lockfile;
+- the ESLint and Jest outcomes;
 - the current local `HEAD` SHA.
 
 The outputs are intentionally minimal:
@@ -535,6 +539,18 @@ Use `current-head-sha` as the commit reference for downstream validation:
 ```yml
 ref: ${{ needs.quality.outputs.current-head-sha }}
 ```
+
+The quality job fails when ESLint reports errors or tests fail. A job that `needs` it is then skipped, because a condition without a status function implies `success()`. To keep running it on a failed quality job (the outputs are still set), add `!cancelled()`:
+
+```yml
+if: |
+  !cancelled() &&
+  needs.quality.outputs.current-head-sha != '' &&
+  needs.quality.outputs.prettier-changed != 'true' &&
+  needs.quality.outputs.audit-changed != 'true'
+```
+
+`current-head-sha` is empty only when the quality job failed before checking out the repository: there is nothing to scan yet.
 
 ---
 
@@ -592,7 +608,10 @@ jobs:
   security:
     name: Security Gate
     needs: quality
+    # Runs even when the quality job fails, so that each gate reports its own result.
     if: |
+      !cancelled() &&
+      needs.quality.outputs.current-head-sha != '' &&
       needs.quality.outputs.prettier-changed != 'true' &&
       needs.quality.outputs.audit-changed != 'true'
     uses: meblabs/security-workflow/.github/workflows/security.yml@v1
@@ -617,11 +636,17 @@ With this structure:
 - this action remains independently usable as the npm quality gate;
 - security scanning is isolated in its own reusable workflow;
 - security does not run on an obsolete commit if Prettier or npm audit pushed automatic changes;
+- security still runs when ESLint or tests fail the quality job, so each gate shows its own result;
 - security scans the exact `current-head-sha` validated by the quality action.
 
 ---
 
 ## Changelog
+
+### v4 — failures are visible
+
+- Failing tests and ESLint errors on the changed lines now fail the action. The action still runs to the end first, so the Jest report, the outputs, and the summary are always published.
+- The step summary shows the ESLint and Jest outcomes.
 
 ### v4.0
 
